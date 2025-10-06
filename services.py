@@ -1,4 +1,4 @@
-from database import get_database
+from database import get_database, Database
 from typing import Dict, List
 from datetime import datetime
 
@@ -12,7 +12,7 @@ class SentimentService:
         Si el tweet tiene sentimiento, lo mantiene.
         Si no tiene sentimiento, le asigna 'desconocido'.
         """
-        db = await get_database()
+        db = Database.get_db()
         symbols_collection = db["symbols"]
         
         # Obtener todos los símbolos
@@ -144,7 +144,7 @@ class SentimentService:
         Crea/actualiza la colección symbols_sentiment con el sentimiento agregado de cada símbolo.
         Si no se encuentra sentimiento en los tweets, asigna 'neutral'.
         """
-        db = await get_database()
+        db = Database.get_db()
         symbols_collection = db["symbols"]
         sentiment_collection = db["symbols_sentiment"]
         
@@ -232,7 +232,7 @@ class SentimentService:
     @staticmethod
     async def get_symbols_sentiment() -> Dict:
         """Obtiene todos los sentimientos de símbolos de la colección symbols_sentiment"""
-        db = await get_database()
+        db = Database.get_db()
         sentiment_collection = db["symbols_sentiment"]
         
         # Obtener todos los documentos
@@ -251,7 +251,7 @@ class SentimentService:
     @staticmethod
     async def get_symbols_summary() -> Dict:
         """Obtiene un resumen de los símbolos y sus tweets"""
-        db = await get_database()
+        db = Database.get_db()
         symbols_collection = db["symbols"]
         
         # Obtener todos los símbolos

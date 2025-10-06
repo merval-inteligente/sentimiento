@@ -40,7 +40,7 @@ async def root():
 async def health_check():
     """Verificar el estado de la API y la conexión a la base de datos"""
     try:
-        db = await Database.get_db()
+        db = Database.get_db()
         # Intentar hacer un ping a la base de datos
         await db.command("ping")
         return {
