@@ -1,0 +1,21 @@
+# AWS Region
+aws_region = "us-east-1"
+
+# Network Configuration - Configuración de tu VPC existente
+# VPC compartido con tus otras instancias (general-general, alertas-api, chat-chat)
+vpc_id            = "vpc-075ea12c12e95bae0"  # Tu VPC ID
+subnet_id         = "subnet-0b69dcddae1c49d91"  # Tu Subnet ID (misma que tus otras instancias)
+security_group_id = "sg-012d0c1b7a70ba81f"  # alertas-public-sg (permite puertos 22, 80, 5000, 8000, 8080)
+
+# SSH Key
+key_name = "millaveuade"  # Tu key pair name
+
+# Instance Configuration
+instance_type = "t2.small"  # o t2.micro para free tier
+instance_name = "sentiment-api-server"
+
+# Application Port
+app_port = 8001
+
+# GitHub Repository
+github_repo = "https://github.com/merval-inteligente/sentimiento.git"

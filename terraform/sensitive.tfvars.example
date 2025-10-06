@@ -1,0 +1,7 @@
+# Sensitive Variables - NO COMMITEAR ESTE ARCHIVO
+# Copia este archivo a terraform.tfvars y completa con tus valores reales
+
+# MongoDB Connection - REQUERIDO
+mongodb_uri   = "mongodb+srv://admin:tRVIi8NhbKbzDj0q@cluster0.dad6cgj.mongodb.net/MervalDB?retryWrites=true&w=majority"
+database_name = "MervalDB"
+db_port       = "27017"
