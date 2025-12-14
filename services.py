@@ -60,6 +60,43 @@ class SentimentService:
         }
     
     @staticmethod
+    def _normalize_sentiment(sentiment: str, sentiment_prob: dict = None) -> str:
+        """
+        Normaliza los diferentes formatos de sentimiento a un formato estándar.
+        Si sentiment está vacío pero hay sentiment_prob, usa la probabilidad más alta.
+        """
+        # Si no hay sentimiento pero hay probabilidades, usar la más alta
+        if (not sentiment or sentiment == "") and sentiment_prob:
+            max_prob = 0
+            max_sentiment = "neutral"
+            for sent_key, prob in sentiment_prob.items():
+                if prob > max_prob:
+                    max_prob = prob
+                    max_sentiment = sent_key
+            sentiment = max_sentiment
+        
+        if not sentiment:
+            return "neutral"
+        
+        sentiment = sentiment.lower().strip()
+        
+        # Mapeo de sentimientos
+        sentiment_map = {
+            "pos": "positivo",
+            "positive": "positivo",
+            "positivo": "positivo",
+            "neg": "negativo",
+            "negative": "negativo",
+            "negativo": "negativo",
+            "neu": "neutral",
+            "neutral": "neutral",
+            "neutro": "neutral",
+            "desconocido": "desconocido"
+        }
+        
+        return sentiment_map.get(sentiment, "neutral")
+    
+    @staticmethod
     def _calculate_overall_sentiment(sentiment_counts: Dict[str, int]) -> str:
         """
         Calcula el sentimiento general basado en el conteo de sentimientos.
@@ -80,9 +117,9 @@ class SentimentService:
         if not known_sentiments:
             return "neutral"
         
-        positive = known_sentiments.get("positivo", 0) + known_sentiments.get("positive", 0)
-        negative = known_sentiments.get("negativo", 0) + known_sentiments.get("negative", 0)
-        neutral = known_sentiments.get("neutral", 0) + known_sentiments.get("neutro", 0)
+        positive = known_sentiments.get("positivo", 0)
+        negative = known_sentiments.get("negativo", 0)
+        neutral = known_sentiments.get("neutral", 0)
         
         total = positive + negative + neutral
         
@@ -142,10 +179,11 @@ class SentimentService:
     async def create_symbols_sentiment_collection() -> Dict:
         """
         Crea/actualiza la colección symbols_sentiment con el sentimiento agregado de cada símbolo.
-        Si no se encuentra sentimiento en los tweets, asigna 'neutral'.
+        Lee los tweets desde la colección 'tweets' y los agrupa por el campo 'company'.
         """
         db = Database.get_db()
         symbols_collection = db["symbols"]
+        tweets_collection = db["tweets"]
         sentiment_collection = db["symbols_sentiment"]
         
         # Obtener todos los símbolos
@@ -165,22 +203,21 @@ class SentimentService:
             symbol_name = symbol.get("symbol", "Unknown")
             symbol_sector = symbol.get("sector", None)
             
+            # Buscar tweets del símbolo en la colección tweets
+            tweets = await tweets_collection.find({"company": symbol_name}).to_list(length=None)
+            
             # Analizar tweets del símbolo
             sentiment_counts = {}
-            total_tweets = 0
+            total_tweets = len(tweets)
             
-            if "tweets" in symbol and symbol["tweets"]:
-                total_tweets = len(symbol["tweets"])
-                
-                for tweet in symbol["tweets"]:
-                    sentiment = tweet.get("sentiment", "neutral")
+            if tweets:
+                for tweet in tweets:
+                    raw_sentiment = tweet.get("sentiment", "")
+                    sentiment_prob = tweet.get("sentiment_prob", None)
                     
-                    # Normalizar sentimientos vacíos o None
-                    if not sentiment or sentiment == "desconocido":
-                        sentiment = "neutral"
-                    
-                    # Normalizar nombres de sentimientos
-                    sentiment = sentiment.lower()
+                    # Normalizar el sentimiento usando la función de normalización
+                    # Si sentiment está vacío, usará sentiment_prob
+                    sentiment = SentimentService._normalize_sentiment(raw_sentiment, sentiment_prob)
                     
                     if sentiment in sentiment_counts:
                         sentiment_counts[sentiment] += 1
@@ -191,11 +228,18 @@ class SentimentService:
             if total_tweets == 0:
                 overall_sentiment = "neutral"
                 sentiment_counts = {"neutral": 1}
+                sentiment_percentages = {"neutral": 0.0}
                 confidence_score = 0.0
             else:
                 # Calcular sentimiento general
                 overall_sentiment = SentimentService._calculate_overall_sentiment(sentiment_counts)
                 confidence_score = SentimentService._calculate_confidence_score(sentiment_counts, total_tweets)
+                
+                # Calcular porcentajes
+                sentiment_percentages = {}
+                for sent, count in sentiment_counts.items():
+                    percentage = round((count / total_tweets) * 100, 2)
+                    sentiment_percentages[sent] = percentage
             
             # Actualizar estadísticas
             sentiment_stats[overall_sentiment] = sentiment_stats.get(overall_sentiment, 0) + 1
@@ -206,6 +250,7 @@ class SentimentService:
                 "sector": symbol_sector,
                 "overall_sentiment": overall_sentiment,
                 "sentiment_counts": sentiment_counts,
+                "sentiment_percentages": sentiment_percentages,
                 "total_tweets": total_tweets,
                 "confidence_score": confidence_score,
                 "last_updated": datetime.utcnow()
@@ -250,32 +295,43 @@ class SentimentService:
     
     @staticmethod
     async def get_symbols_summary() -> Dict:
-        """Obtiene un resumen de los símbolos y sus tweets"""
+        """Obtiene un resumen de los símbolos y sus tweets desde la colección tweets"""
         db = Database.get_db()
         symbols_collection = db["symbols"]
+        tweets_collection = db["tweets"]
         
         # Obtener todos los símbolos
         symbols = await symbols_collection.find({}).to_list(length=None)
         
         summary = []
         for symbol in symbols:
+            symbol_name = symbol.get("symbol", "Unknown")
+            
+            # Buscar tweets del símbolo
+            tweets = await tweets_collection.find({"company": symbol_name}).to_list(length=None)
+            
             symbol_data = {
-                "symbol": symbol.get("symbol", "Unknown"),
-                "total_tweets": len(symbol.get("tweets", [])),
+                "symbol": symbol_name,
+                "total_tweets": len(tweets),
                 "tweets_with_sentiment": 0,
                 "tweets_without_sentiment": 0,
                 "sentiments": {}
             }
             
             # Analizar tweets
-            for tweet in symbol.get("tweets", []):
-                sentiment = tweet.get("sentiment", None)
-                if sentiment:
+            for tweet in tweets:
+                sentiment = tweet.get("sentiment", "")
+                sentiment_prob = tweet.get("sentiment_prob", None)
+                
+                # Normalizar sentimiento
+                normalized_sentiment = SentimentService._normalize_sentiment(sentiment, sentiment_prob)
+                
+                if sentiment or sentiment_prob:
                     symbol_data["tweets_with_sentiment"] += 1
-                    if sentiment in symbol_data["sentiments"]:
-                        symbol_data["sentiments"][sentiment] += 1
+                    if normalized_sentiment in symbol_data["sentiments"]:
+                        symbol_data["sentiments"][normalized_sentiment] += 1
                     else:
-                        symbol_data["sentiments"][sentiment] = 1
+                        symbol_data["sentiments"][normalized_sentiment] = 1
                 else:
                     symbol_data["tweets_without_sentiment"] += 1
             

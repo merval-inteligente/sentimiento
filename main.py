@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import Database
 from services import SentimentService
@@ -21,6 +22,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configurar CORS para permitir todas las IPs
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite todos los orígenes
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],  # Permite todos los headers
+)
+
 @app.get("/")
 async def root():
     """Endpoint raíz"""
@@ -35,6 +45,37 @@ async def root():
             "/health": "GET - Verifica el estado de la API"
         }
     }
+
+@app.get("/debug/tweets-count")
+async def debug_tweets_count():
+    """Endpoint de debug para ver cuántos tweets hay por símbolo"""
+    try:
+        db = Database.get_db()
+        tweets_collection = db["tweets"]
+        
+        # Contar tweets totales
+        total_tweets = await tweets_collection.count_documents({})
+        
+        # Obtener lista de companies únicas
+        companies = await tweets_collection.distinct("company")
+        
+        # Contar por símbolo
+        company_counts = {}
+        for company in companies:
+            count = await tweets_collection.count_documents({"company": company})
+            company_counts[company] = count
+        
+        return {
+            "total_tweets": total_tweets,
+            "total_companies": len(companies),
+            "companies": sorted(companies),
+            "tweets_per_company": company_counts
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error: {str(e)}"
+        )
 
 @app.get("/health")
 async def health_check():

@@ -33,6 +33,7 @@ class SymbolSentiment(BaseModel):
     sector: Optional[str] = None
     overall_sentiment: str
     sentiment_counts: dict
+    sentiment_percentages: dict
     total_tweets: int
     confidence_score: Optional[float] = None
     last_updated: datetime = Field(default_factory=datetime.utcnow)
